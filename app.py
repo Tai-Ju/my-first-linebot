@@ -27,11 +27,33 @@ from linebot.v3.webhooks import (
 from modules.reply import faq, menu
 
 import os
+import requests
+import base64
+
+from dotenv import load_dotenv
+#從openai 模組引入 OpenAI 類別
+from openai import OpenAI
+
+
+
+# 是否在render.com上運行
+running_on_render = os.getenv("RENDER")
+print("現在是在render上運行嗎?", running_on_render)
+
+#如果不在render.com上運行，才需要讀取本機端的.env
+if not running_on_render:
+    #載入環境變數
+    load_dotenv()
+
+client = OpenAI(
+    api_key=os.getenv("OPENAI_API_KEY")
+
+)
+
 
 app = Flask(__name__)
 
-# Line Channel 可於 Line Developer Console 申辦
-# https://developers.line.biz/en/
+
 
 # TODO: 填入你的 CHANNEL_SECRET 與 CHANNEL_ACCESS_TOKEN
 CHANNEL_SECRET = os.getenv("CHANNEL_SECRET")
@@ -70,7 +92,7 @@ def handle_message(event):
         user_msg = event.message.text
         print("使用者傳入的文字訊息是:", user_msg)
         # 使用TextMessage產生一段用於回應使用者的Line文字訊息
-        bot_msg = TextMessage(text=f"Hiii 你剛才說的是: {user_msg}")
+        bot_msg = TextMessage(text=f"哈囉 你剛才說的是: {user_msg}")
 
         #如果使用者打的文字在faq 內作為key，就把value 當作回應
         if user_msg in faq:
@@ -78,6 +100,22 @@ def handle_message(event):
             bot_msg = faq[user_msg]
         elif user_msg.lower() in ["menu", "選單", "主選單"]:
             bot_msg = menu
+        else:
+            # 如果不是在上述考慮的回應，就使用openAI來回答
+            response = client.responses.create(
+                model="gpt-4o",
+                messages=[
+                    {
+                        "role": "system",
+                        "content":"你是一個專業的Line機器人，請你根據使用者傳入的文字訊息，給予最適當的回應"
+                    },
+                    {
+                        "role": "user",
+                        "content": user_msg
+                    }   
+                ]
+            )
+            bot_msg = TextMessage(text=response.output_text)
 
         line_bot_api.reply_message_with_http_info(
             ReplyMessageRequest(
@@ -137,6 +175,66 @@ def handle_location_message(event):
                     TextMessage(text=f"The longitude is {longitude}."),
                     TextMessage(text=f"The address is {address}."),
                     LocationMessage(title="Here is the location you sent.", address=address, latitude=latitude, longitude=longitude)
+                ]
+            )
+        )
+
+
+# 此處理器負責處理接收到Line Server傳來的圖片訊息時的流程
+@handler.add(MessageEvent, message=ImageMessageContent)
+def handle_image_message(event):
+    with ApiClient(configuration) as api_client:
+        print("event.message裡面有甚麼",event.message.id)
+        message_id = event.message.id
+        # 當使用者傳入圖片時
+        line_bot_api = MessagingApi(api_client)
+        
+        # 設定請求標頭
+        headers = {
+            'Authorization': f'Bearer {CHANNEL_ACCESS_TOKEN}'
+        }
+        
+        # 設定請求 URL
+        url = f'https://api-data.line.me/v2/bot/message/{message_id}/content'
+        
+        # 發送 GET 請求取得圖片內容
+        response = requests.get(url, headers=headers)
+        
+        # 將圖片內容轉換為 base64
+        image_base64 = base64.b64encode(response.content).decode('utf-8')
+        #print("圖片 base64 編碼:", image_base64)
+        
+        # 使用 OpenAI 進行影像辨識
+        ai_response = client.responses.create(
+            model="gpt-4o",
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": "請簡單描述這張圖片中的內容"
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/jpeg;base64,{image_base64}"
+                            }
+                        }
+                    ]
+                }
+            ],
+            max_tokens=300
+        )
+        
+        # 取得 AI 的回應
+        ai_description = ai_response.choices[0].message.content
+        
+        line_bot_api.reply_message_with_http_info(
+            ReplyMessageRequest(
+                reply_token=event.reply_token,
+                messages=[
+                    TextMessage(text=f"收到圖片了！\nAI 看到的內容是：\n{ai_description}")
                 ]
             )
         )
