@@ -102,7 +102,7 @@ def handle_message(event):
             bot_msg = menu
         else:
             # 如果不是在上述考慮的回應，就使用openAI來回答
-            response = client.responses.create(
+            completion = client.chat.completions.create(
                 model="gpt-4o",
                 messages=[
                     {
@@ -115,7 +115,7 @@ def handle_message(event):
                     }   
                 ]
             )
-            bot_msg = TextMessage(text=response.output_text)
+            bot_msg = TextMessage(text=completion.choices[0].message.content)
 
         line_bot_api.reply_message_with_http_info(
             ReplyMessageRequest(
