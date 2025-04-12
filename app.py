@@ -205,7 +205,7 @@ def handle_image_message(event):
         #print("圖片 base64 編碼:", image_base64)
         
         # 使用 OpenAI 進行影像辨識
-        ai_response = client.responses.create(
+        ai_response = client.chat.completions.create(
             model="gpt-4o",
             messages=[
                 {
