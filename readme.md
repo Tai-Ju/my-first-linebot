@@ -1,5 +1,10 @@
 
 # Line-bot-python-simple-starter
+## 🌐 功能展示
+
+🤖 **Live Demo**：[tai-ju.github.io/my-first-linebot](https://tai-ju.github.io/my-first-linebot/)
+
+> 支援文字（FAQ + GPT-4o 兜底）、圖片辨識（GPT-4o Vision）、貼圖回應、地理位置回傳，部署於 Render。
 
 ## 安裝所需要的外部模組
 ```
